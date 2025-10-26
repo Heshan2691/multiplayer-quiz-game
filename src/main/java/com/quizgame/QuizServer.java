@@ -15,6 +15,14 @@ public class QuizServer extends WebSocketServer {
     private static final ConcurrentHashMap<WebSocket, String> usernames = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, Integer> scores = new ConcurrentHashMap<>();
 
+    // Question bank (static for simplicity)
+    private static final String[] QUESTIONS = {
+            "Q: What’s 2+2? A)1 B)2 C)3 D)4",
+            "Q: Capital of France? A)London B)Paris C)Berlin D)Rome",
+            "Q: How many planets? A)7 B)8 C)9 D)10"
+    };
+    private static int questionIndex = 0;
+
     public QuizServer() {
         super(new InetSocketAddress(PORT));
     }
@@ -48,7 +56,11 @@ public class QuizServer extends WebSocketServer {
             conn.send("Welcome, " + username + "! Get ready for questions.");
             return;
         }
-        // Handle answers or commands later
+        // Placeholder for answer handling (to be expanded by Answer Processing role)
+        if (message.startsWith("answer")) {
+            System.out.println(usernames.get(conn) + " submitted: " + message);
+            return;
+        }
         sendToAllExcludingSender(usernames.get(conn) + ": " + message, conn);
     }
 
@@ -60,13 +72,55 @@ public class QuizServer extends WebSocketServer {
     @Override
     public void onStart() {
         System.out.println("Quiz Server started on port " + PORT);
+        // Start question broadcast thread
+        new Thread(new QuestionEngine()).start();
     }
 
-    // Renamed to avoid ambiguity with WebSocketServer.broadcast
+    // Custom broadcast method (renamed to avoid ambiguity)
     private void sendToAllExcludingSender(String message, WebSocket sender) {
         for (WebSocket player : players) {
             if (player != sender && player.isOpen()) {
                 player.send(message);
+            }
+        }
+    }
+
+    // Inner class for question broadcasting and timing
+    private static class QuestionEngine implements Runnable {
+        @Override
+        public void run() {
+            while (true) {
+                String question = QUESTIONS[questionIndex++ % QUESTIONS.length];
+                System.out.println("Broadcasting: " + question);
+                // Broadcast to all players (including sender for simplicity)
+                for (WebSocket player : players) {
+                    if (player.isOpen()) {
+                        player.send(question);
+                    }
+                }
+                // Optional countdown (uncomment to enable)
+
+                for (int i = 15; i > 0; i--) {
+                    for (WebSocket player : players) {
+                        if (player.isOpen()) {
+                            player.send("Time left: " + i + "s");
+                        }
+                    }
+                    try {
+                        Thread.sleep(1000); // 1 second per update
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+
+                // Wait 15 seconds before next question
+                try {
+                    Thread.sleep(15000); // 15 seconds per round
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
         }
     }
