@@ -8,6 +8,11 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.io.IOException;
 
 public class QuizServer extends WebSocketServer {
     private static final int PORT = 1234;
@@ -15,13 +20,20 @@ public class QuizServer extends WebSocketServer {
     private static final ConcurrentHashMap<WebSocket, String> usernames = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, Integer> scores = new ConcurrentHashMap<>();
 
-    // Question bank (static for simplicity)
-    private static final String[] QUESTIONS = {
-            "Q: What’s 2+2? A)1 B)2 C)3 D)4",
-            "Q: Capital of France? A)London B)Paris C)Berlin D)Rome",
-            "Q: How many planets? A)7 B)8 C)9 D)10"
-    };
+    // Dynamic question list loaded from JSON
+    private static JSONArray questions;
     private static int questionIndex = 0;
+    private static boolean answersProcessed = false; // Flag for timer reset coordination
+
+    static {
+        try {
+            String jsonContent = new String(Files.readAllBytes(Paths.get("questions.json")));
+            questions = new JSONArray(jsonContent);
+        } catch (IOException e) {
+            System.err.println("Error loading questions.json: " + e.getMessage());
+            questions = new JSONArray(); // Fallback empty array
+        }
+    }
 
     public QuizServer() {
         super(new InetSocketAddress(PORT));
@@ -59,6 +71,11 @@ public class QuizServer extends WebSocketServer {
         // Placeholder for answer handling (to be expanded by Answer Processing role)
         if (message.startsWith("answer")) {
             System.out.println(usernames.get(conn) + " submitted: " + message);
+            // Coordinate with Answer Processing: Set flag when all answers processed
+            // This is a placeholder—replace with actual signal logic
+            if (allAnswersReceived()) { // Hypothetical method
+                answersProcessed = true;
+            }
             return;
         }
         sendToAllExcludingSender(usernames.get(conn) + ": " + message, conn);
@@ -87,41 +104,62 @@ public class QuizServer extends WebSocketServer {
 
     // Inner class for question broadcasting and timing
     private static class QuestionEngine implements Runnable {
+        private static final int ROUND_DURATION = 15000; // 15 seconds
+
         @Override
         public void run() {
             while (true) {
-                String question = QUESTIONS[questionIndex++ % QUESTIONS.length];
-                System.out.println("Broadcasting: " + question);
-                // Broadcast to all players (including sender for simplicity)
-                for (WebSocket player : players) {
-                    if (player.isOpen()) {
-                        player.send(question);
-                    }
-                }
-                // Optional countdown (uncomment to enable)
-
-                for (int i = 15; i > 0; i--) {
+                if (!questions.isEmpty()) {
+                    JSONObject questionObj = questions.getJSONObject(questionIndex++ % questions.length());
+                    String question = questionObj.getString("question") + " " +
+                            String.join(" ", questionObj.getJSONArray("options").toList().toArray(new String[0]));
+                    System.out.println("Broadcasting: " + question);
+                    // Broadcast to all players
                     for (WebSocket player : players) {
                         if (player.isOpen()) {
-                            player.send("Time left: " + i + "s");
+                            player.send(question);
                         }
                     }
-                    try {
-                        Thread.sleep(1000); // 1 second per update
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
-                }
 
-                // Wait 15 seconds before next question
+                    // Reset flag for this round
+                    answersProcessed = false;
+
+                    // Wait for round duration or until answers processed
+                    long startTime = System.currentTimeMillis();
+                    while (System.currentTimeMillis() - startTime < ROUND_DURATION) {
+                        if (answersProcessed) {
+                            break; // Reset timer if answers processed
+                        }
+                        try {
+                            Thread.sleep(100); // Check every 100ms
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
+                    }
+                } else {
+                    System.out.println("No questions available.");
+                }
                 try {
-                    Thread.sleep(15000); // 15 seconds per round
+                    Thread.sleep(1000); // Brief pause before next round
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     break;
                 }
             }
+        }
+    }
+
+    // Placeholder method for coordination with Answer Processing
+    private boolean allAnswersReceived() {
+        // This should be implemented by the Answer Processing role
+        // For now, simulate after a delay (e.g., 5 seconds)
+        try {
+            Thread.sleep(5000); // Simulate answer collection
+            return players.size() > 0; // Dummy condition
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
         }
     }
 

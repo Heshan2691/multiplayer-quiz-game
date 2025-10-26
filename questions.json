@@ -1,0 +1,17 @@
+[
+  {
+    "question": "What’s 2+2?",
+    "options": ["1", "2", "3", "4"],
+    "correctAnswer": "3"
+  },
+  {
+    "question": "Capital of France?",
+    "options": ["London", "Paris", "Berlin", "Rome"],
+    "correctAnswer": "Paris"
+  },
+  {
+    "question": "How many planets?",
+    "options": ["7", "8", "9", "10"],
+    "correctAnswer": "8"
+  }
+]
