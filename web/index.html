@@ -6,13 +6,17 @@
     <title>Quiz Game</title>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f0f0f0; }
-        #messages { height: 200px; overflow-y: auto; border: 1px solid #ccc; margin: 10px 0; padding: 10px; }
+        #messages { height: 200px; overflow-y: auto; border: 1px solid #ccc; margin: 10px 0; padding: 10px; background: white; }
+        #question { margin: 10px 0; font-size: 1.2em; color: #333; }
         #inputArea { margin: 10px 0; }
         input, button { padding: 5px; margin: 0 5px; }
+        .system { color: #666; font-style: italic; }
+        .message { color: #007bff; }
     </style>
 </head>
 <body>
 <h1>🎉 Quiz Game</h1>
+<div id="question"></div>
 <div id="messages"></div>
 <div id="inputArea">
     <input type="text" id="messageInput" placeholder="Type here..." onkeypress="if(event.key==='Enter') sendMessage();">
@@ -23,13 +27,23 @@
     const ws = new WebSocket('ws://localhost:1234');
     const messagesDiv = document.getElementById('messages');
     const input = document.getElementById('messageInput');
+    const questionDiv = document.getElementById('question');
 
     ws.onopen = function() {
         addMessage('Connected! Waiting for username...', 'system');
     };
 
     ws.onmessage = function(event) {
-        addMessage(event.data, 'message');
+        const msg = event.data;
+        if (msg.includes('Enter your username:')) {
+            const username = prompt(msg) || 'Anonymous';
+            ws.send(username);
+            addMessage('Welcome, ' + username + '! Get ready for questions.', 'system');
+        } else if (msg.startsWith('Q:')) {
+            questionDiv.textContent = msg; // Display question
+        } else {
+            addMessage(msg, msg.includes(':') ? 'message' : 'system');
+        }
     };
 
     ws.onclose = function() {
