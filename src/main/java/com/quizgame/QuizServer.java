@@ -16,12 +16,20 @@ import java.io.IOException;
 public class QuizServer extends WebSocketServer {
     private static final int PORT = 1234;
     private static final Set<WebSocket> players = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private static final Set<WebSocket> admins = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private static final ConcurrentHashMap<WebSocket, String> usernames = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, Integer> scores = new ConcurrentHashMap<>();
 
     // Dynamic question list loaded from JSON
     private static JSONArray questions;
     private static int questionIndex = 0;
+    private static boolean gameRunning = false;
+    private static QuestionEngine questionEngine;
+
+    // Configurable settings
+    private static int questionDuration = 20000; // 20 seconds
+    private static int pauseDuration = 5000; // 5 seconds
+    private static int pointsPerAnswer = 100;
 
     static {
         try {
@@ -46,17 +54,39 @@ public class QuizServer extends WebSocketServer {
 
     @Override
     public void onClose(WebSocket conn, int code, String reason, boolean remote) {
+        // Check if admin disconnected
+        if (admins.contains(conn)) {
+            admins.remove(conn);
+            System.out.println("Admin disconnected.");
+            return;
+        }
+
         players.remove(conn);
         String username = usernames.remove(conn);
         if (username != null) {
             scores.remove(username);
             sendToAllExcludingSender(username + " has left the game.", null);
             System.out.println("Player '" + username + "' disconnected.");
+            broadcastToAdmins();
         }
     }
 
     @Override
     public void onMessage(WebSocket conn, String message) {
+        // Check if this is an admin connection
+        if ("__ADMIN__".equals(message)) {
+            admins.add(conn);
+            System.out.println("Admin connected: " + conn.getRemoteSocketAddress());
+            sendAdminData(conn);
+            return;
+        }
+
+        // Check if this is an admin command
+        if (admins.contains(conn)) {
+            handleAdminCommand(conn, message);
+            return;
+        }
+
         if (usernames.get(conn) == null) {
             String username = message.trim();
             if (username.isEmpty()) username = "Anonymous";
@@ -76,6 +106,9 @@ public class QuizServer extends WebSocketServer {
             sendToAllExcludingSender(joinMsg.toString(), conn);
 
             System.out.println("Player '" + username + "' joined the game.");
+
+            // Update admin panels
+            broadcastToAdmins();
             return;
         }
 
@@ -93,9 +126,9 @@ public class QuizServer extends WebSocketServer {
                     String correctAnswer = questionObj.getString("correctAnswer");
 
                     if (answer.equals(correctAnswer)) {
-                        // Award points (more points for faster answers)
+                        // Award points (configurable)
                         int currentScore = scores.getOrDefault(username, 0);
-                        scores.put(username, currentScore + 100);
+                        scores.put(username, currentScore + pointsPerAnswer);
 
                         JSONObject correctMsg = new JSONObject();
                         correctMsg.put("type", "answerResult");
@@ -109,6 +142,9 @@ public class QuizServer extends WebSocketServer {
                         wrongMsg.put("correctAnswer", correctAnswer);
                         conn.send(wrongMsg.toString());
                     }
+
+                    // Update admin panels
+                    broadcastToAdmins();
                 }
             }
         } catch (Exception e) {
@@ -139,11 +175,152 @@ public class QuizServer extends WebSocketServer {
         }
     }
 
+    // Admin methods
+    private void sendAdminData(WebSocket admin) {
+        JSONObject data = new JSONObject();
+        data.put("type", "adminData");
+        data.put("questions", questions);
+        data.put("currentQuestion", questionIndex);
+
+        JSONArray playerList = new JSONArray();
+        for (WebSocket player : players) {
+            String username = usernames.get(player);
+            if (username != null) {
+                JSONObject playerData = new JSONObject();
+                playerData.put("username", username);
+                playerData.put("score", scores.getOrDefault(username, 0));
+                playerList.put(playerData);
+            }
+        }
+        data.put("players", playerList);
+
+        admin.send(data.toString());
+    }
+
+    private void broadcastToAdmins() {
+        for (WebSocket admin : admins) {
+            if (admin.isOpen()) {
+                sendAdminData(admin);
+            }
+        }
+    }
+
+    private void handleAdminCommand(WebSocket admin, String message) {
+        try {
+            JSONObject cmd = new JSONObject(message);
+            String command = cmd.getString("command");
+            JSONObject data = cmd.optJSONObject("data");
+
+            switch (command) {
+                case "addQuestion":
+                    addQuestion(data);
+                    break;
+                case "deleteQuestion":
+                    deleteQuestion(data.getInt("index"));
+                    break;
+                case "updateSettings":
+                    updateSettings(data);
+                    break;
+                case "startGame":
+                    startGame();
+                    break;
+                case "stopGame":
+                    stopGame();
+                    break;
+                case "skipQuestion":
+                    skipQuestion();
+                    break;
+                case "resetScores":
+                    resetScores();
+                    break;
+                case "getStatus":
+                    sendAdminData(admin);
+                    break;
+            }
+        } catch (Exception e) {
+            System.err.println("Error handling admin command: " + e.getMessage());
+        }
+    }
+
+    private void addQuestion(JSONObject questionData) {
+        try {
+            questions.put(questionData);
+            saveQuestions();
+            broadcastToAdmins();
+            System.out.println("Question added: " + questionData.getString("question"));
+        } catch (Exception e) {
+            System.err.println("Error adding question: " + e.getMessage());
+        }
+    }
+
+    private void deleteQuestion(int index) {
+        try {
+            if (index >= 0 && index < questions.length()) {
+                questions.remove(index);
+                saveQuestions();
+                broadcastToAdmins();
+                System.out.println("Question deleted at index: " + index);
+            }
+        } catch (Exception e) {
+            System.err.println("Error deleting question: " + e.getMessage());
+        }
+    }
+
+    private void updateSettings(JSONObject settings) {
+        try {
+            if (settings.has("questionDuration")) {
+                questionDuration = settings.getInt("questionDuration");
+            }
+            if (settings.has("pauseDuration")) {
+                pauseDuration = settings.getInt("pauseDuration");
+            }
+            if (settings.has("pointsPerAnswer")) {
+                pointsPerAnswer = settings.getInt("pointsPerAnswer");
+            }
+            System.out.println("Settings updated: Timer=" + (questionDuration/1000) + "s, Points=" + pointsPerAnswer);
+        } catch (Exception e) {
+            System.err.println("Error updating settings: " + e.getMessage());
+        }
+    }
+
+    private void startGame() {
+        gameRunning = true;
+        System.out.println("Game started by admin");
+    }
+
+    private void stopGame() {
+        gameRunning = false;
+        System.out.println("Game stopped by admin");
+    }
+
+    private void skipQuestion() {
+        questionIndex++;
+        System.out.println("Question skipped by admin");
+    }
+
+    private void resetScores() {
+        scores.clear();
+        for (WebSocket player : players) {
+            String username = usernames.get(player);
+            if (username != null) {
+                scores.put(username, 0);
+            }
+        }
+        broadcastToAdmins();
+        System.out.println("All scores reset by admin");
+    }
+
+    private void saveQuestions() {
+        try {
+            Files.write(Paths.get("questions.json"), questions.toString(2).getBytes());
+            System.out.println("Questions saved to file");
+        } catch (IOException e) {
+            System.err.println("Error saving questions: " + e.getMessage());
+        }
+    }
+
     // Inner class for question broadcasting and timing
     private static class QuestionEngine implements Runnable {
-        private static final int ROUND_DURATION = 20000; // 20 seconds
-        private static final int PAUSE_BETWEEN_QUESTIONS = 5000; // 5 seconds
-
         @Override
         public void run() {
             try {
@@ -153,7 +330,8 @@ public class QuizServer extends WebSocketServer {
             }
 
             while (true) {
-                if (!questions.isEmpty() && !players.isEmpty()) {
+                // Only broadcast if game is running
+                if (gameRunning && !questions.isEmpty() && !players.isEmpty()) {
                     int currentIndex = questionIndex % questions.length();
                     JSONObject questionObj = questions.getJSONObject(currentIndex);
 
@@ -163,7 +341,7 @@ public class QuizServer extends WebSocketServer {
                     questionMsg.put("question", questionObj.getString("question"));
                     questionMsg.put("options", questionObj.getJSONArray("options"));
                     questionMsg.put("questionIndex", currentIndex);
-                    questionMsg.put("duration", ROUND_DURATION / 1000); // Send duration in seconds
+                    questionMsg.put("duration", questionDuration / 1000); // Send duration in seconds
                     questionMsg.put("questionNumber", questionIndex + 1);
                     questionMsg.put("totalQuestions", questions.length());
 
@@ -179,7 +357,7 @@ public class QuizServer extends WebSocketServer {
 
                     // Wait for round duration
                     try {
-                        Thread.sleep(ROUND_DURATION);
+                        Thread.sleep(questionDuration);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         break;
@@ -192,7 +370,7 @@ public class QuizServer extends WebSocketServer {
 
                     // Pause before next question
                     try {
-                        Thread.sleep(PAUSE_BETWEEN_QUESTIONS);
+                        Thread.sleep(pauseDuration);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         break;
@@ -202,7 +380,7 @@ public class QuizServer extends WebSocketServer {
                         System.out.println("No questions available.");
                     }
                     try {
-                        Thread.sleep(2000); // Wait for players
+                        Thread.sleep(2000); // Wait for players or game to start
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         break;

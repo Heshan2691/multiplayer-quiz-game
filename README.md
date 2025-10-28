@@ -6,11 +6,14 @@ A real-time multiplayer quiz game similar to Kahoot and Mentimeter, built with J
 
 ✨ **Real-time Multiplayer**: Multiple players can join and compete simultaneously
 🎨 **Beautiful UI**: Colorful, responsive design inspired by Kahoot
-⏱️ **Timed Questions**: 20-second countdown for each question
+⏱️ **Timed Questions**: Configurable countdown for each question (default 20s)
 🏆 **Live Leaderboard**: Real-time score tracking and rankings
 🎯 **Multiple Choice**: Four colorful answer options
 📊 **Results Display**: Shows correct answers and updated leaderboard after each question
 🔔 **Notifications**: Real-time updates when players join/leave
+👨‍💼 **Admin Panel**: Full game control with question management, timing, and settings
+🎮 **Game Control**: Start/stop/pause game from admin panel
+⚙️ **Customizable**: Adjust timer, points, and pause duration in real-time
 
 ## Prerequisites
 
@@ -23,12 +26,14 @@ A real-time multiplayer quiz game similar to Kahoot and Mentimeter, built with J
 ```
 multiplayer-quiz-game/
 ├── src/main/java/com/quizgame/
-│   └── QuizServer.java          # WebSocket server
+│   └── QuizServer.java          # WebSocket server with admin support
 ├── web/
-│   └── index.html               # Game client interface
+│   ├── index.html               # Player game interface
+│   └── admin.html               # Admin control panel (NEW!)
 ├── questions.json               # Quiz questions database
 ├── pom.xml                      # Maven dependencies
-└── README.md
+├── README.md                    # Main documentation
+└── ADMIN-GUIDE.md              # Complete admin panel guide (NEW!)
 ```
 
 ## How to Run
@@ -47,7 +52,19 @@ The server will start on `ws://localhost:1234`
 
 Open `web/index.html` in your web browser. You can open multiple browser tabs/windows to simulate multiple players.
 
-### 3. Play the Game
+### 3. Open Admin Panel (Optional but Recommended)
+
+Open `web/admin.html` in another browser tab to control the game:
+- Add/delete questions in real-time
+- Set question timer duration
+- Start/stop the game
+- Monitor connected players
+- Reset scores
+- Skip questions
+
+**Important**: Game starts in STOPPED mode. Click "▶️ Start Game" in admin panel to begin broadcasting questions.
+
+### 4. Play the Game
 
 1. Enter your username
 2. Wait for questions to be broadcast (3-second initial delay)
