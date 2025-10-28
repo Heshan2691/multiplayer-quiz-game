@@ -5,7 +5,6 @@ import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import java.net.InetSocketAddress;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.json.JSONArray;
@@ -23,7 +22,6 @@ public class QuizServer extends WebSocketServer {
     // Dynamic question list loaded from JSON
     private static JSONArray questions;
     private static int questionIndex = 0;
-    private static boolean answersProcessed = false; // Flag for timer reset coordination
 
     static {
         try {
@@ -64,26 +62,65 @@ public class QuizServer extends WebSocketServer {
             if (username.isEmpty()) username = "Anonymous";
             usernames.put(conn, username);
             scores.put(username, 0);
-            sendToAllExcludingSender(username + " has joined the game!", null);
-            conn.send("Welcome, " + username + "! Get ready for questions.");
+
+            // Send welcome message with player info
+            JSONObject welcomeMsg = new JSONObject();
+            welcomeMsg.put("type", "welcome");
+            welcomeMsg.put("username", username);
+            conn.send(welcomeMsg.toString());
+
+            // Broadcast to others
+            JSONObject joinMsg = new JSONObject();
+            joinMsg.put("type", "playerJoined");
+            joinMsg.put("username", username);
+            sendToAllExcludingSender(joinMsg.toString(), conn);
+
+            System.out.println("Player '" + username + "' joined the game.");
             return;
         }
-        // Placeholder for answer handling (to be expanded by Answer Processing role)
-        if (message.startsWith("answer")) {
-            System.out.println(usernames.get(conn) + " submitted: " + message);
-            // Coordinate with Answer Processing: Set flag when all answers processed
-            // This is a placeholder—replace with actual signal logic
-            if (allAnswersReceived()) { // Hypothetical method
-                answersProcessed = true;
+
+        // Handle answer submission
+        try {
+            JSONObject msgObj = new JSONObject(message);
+            if ("answer".equals(msgObj.getString("type"))) {
+                String username = usernames.get(conn);
+                String answer = msgObj.getString("answer");
+                int questionIdx = msgObj.getInt("questionIndex");
+
+                // Check if answer is correct
+                if (questionIdx < questions.length()) {
+                    JSONObject questionObj = questions.getJSONObject(questionIdx);
+                    String correctAnswer = questionObj.getString("correctAnswer");
+
+                    if (answer.equals(correctAnswer)) {
+                        // Award points (more points for faster answers)
+                        int currentScore = scores.getOrDefault(username, 0);
+                        scores.put(username, currentScore + 100);
+
+                        JSONObject correctMsg = new JSONObject();
+                        correctMsg.put("type", "answerResult");
+                        correctMsg.put("correct", true);
+                        correctMsg.put("score", scores.get(username));
+                        conn.send(correctMsg.toString());
+                    } else {
+                        JSONObject wrongMsg = new JSONObject();
+                        wrongMsg.put("type", "answerResult");
+                        wrongMsg.put("correct", false);
+                        wrongMsg.put("correctAnswer", correctAnswer);
+                        conn.send(wrongMsg.toString());
+                    }
+                }
             }
-            return;
+        } catch (Exception e) {
+            System.err.println("Error processing message: " + e.getMessage());
         }
-        sendToAllExcludingSender(usernames.get(conn) + ": " + message, conn);
     }
 
     @Override
     public void onError(WebSocket conn, Exception ex) {
-        ex.printStackTrace();
+        if (ex != null) {
+            System.err.println("WebSocket error: " + ex.getMessage());
+        }
     }
 
     @Override
@@ -104,67 +141,110 @@ public class QuizServer extends WebSocketServer {
 
     // Inner class for question broadcasting and timing
     private static class QuestionEngine implements Runnable {
-        private static final int ROUND_DURATION = 15000; // 15 seconds
+        private static final int ROUND_DURATION = 20000; // 20 seconds
+        private static final int PAUSE_BETWEEN_QUESTIONS = 5000; // 5 seconds
 
         @Override
         public void run() {
+            try {
+                Thread.sleep(3000); // Initial delay for players to join
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+
             while (true) {
-                if (!questions.isEmpty()) {
-                    JSONObject questionObj = questions.getJSONObject(questionIndex++ % questions.length());
-                    String question = questionObj.getString("question") + " " +
-                            String.join(" ", questionObj.getJSONArray("options").toList().toArray(new String[0]));
-                    System.out.println("Broadcasting: " + question);
+                if (!questions.isEmpty() && !players.isEmpty()) {
+                    int currentIndex = questionIndex % questions.length();
+                    JSONObject questionObj = questions.getJSONObject(currentIndex);
+
+                    // Create question message
+                    JSONObject questionMsg = new JSONObject();
+                    questionMsg.put("type", "question");
+                    questionMsg.put("question", questionObj.getString("question"));
+                    questionMsg.put("options", questionObj.getJSONArray("options"));
+                    questionMsg.put("questionIndex", currentIndex);
+                    questionMsg.put("duration", ROUND_DURATION / 1000); // Send duration in seconds
+                    questionMsg.put("questionNumber", questionIndex + 1);
+                    questionMsg.put("totalQuestions", questions.length());
+
+                    String questionMessage = questionMsg.toString();
+                    System.out.println("Broadcasting question " + (questionIndex + 1) + ": " + questionObj.getString("question"));
+
                     // Broadcast to all players
                     for (WebSocket player : players) {
                         if (player.isOpen()) {
-                            player.send(question);
+                            player.send(questionMessage);
                         }
                     }
 
-                    // Reset flag for this round
-                    answersProcessed = false;
+                    // Wait for round duration
+                    try {
+                        Thread.sleep(ROUND_DURATION);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
 
-                    // Wait for round duration or until answers processed
-                    long startTime = System.currentTimeMillis();
-                    while (System.currentTimeMillis() - startTime < ROUND_DURATION) {
-                        if (answersProcessed) {
-                            break; // Reset timer if answers processed
-                        }
-                        try {
-                            Thread.sleep(100); // Check every 100ms
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            break;
-                        }
+                    // Show correct answer and leaderboard
+                    broadcastResults(currentIndex);
+
+                    questionIndex++;
+
+                    // Pause before next question
+                    try {
+                        Thread.sleep(PAUSE_BETWEEN_QUESTIONS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
                     }
                 } else {
-                    System.out.println("No questions available.");
-                }
-                try {
-                    Thread.sleep(1000); // Brief pause before next round
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
+                    if (questions.isEmpty()) {
+                        System.out.println("No questions available.");
+                    }
+                    try {
+                        Thread.sleep(2000); // Wait for players
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
                 }
             }
         }
-    }
 
-    // Placeholder method for coordination with Answer Processing
-    private boolean allAnswersReceived() {
-        // This should be implemented by the Answer Processing role
-        // For now, simulate after a delay (e.g., 5 seconds)
-        try {
-            Thread.sleep(5000); // Simulate answer collection
-            return players.size() > 0; // Dummy condition
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return false;
+        private void broadcastResults(int questionIdx) {
+            JSONObject questionObj = questions.getJSONObject(questionIdx);
+            String correctAnswer = questionObj.getString("correctAnswer");
+
+            // Create leaderboard
+            JSONArray leaderboard = new JSONArray();
+            scores.entrySet().stream()
+                .sorted((a, b) -> b.getValue().compareTo(a.getValue()))
+                .forEach(entry -> {
+                    JSONObject playerScore = new JSONObject();
+                    playerScore.put("username", entry.getKey());
+                    playerScore.put("score", entry.getValue());
+                    leaderboard.put(playerScore);
+                });
+
+            JSONObject resultsMsg = new JSONObject();
+            resultsMsg.put("type", "results");
+            resultsMsg.put("correctAnswer", correctAnswer);
+            resultsMsg.put("leaderboard", leaderboard);
+
+            String resultsMessage = resultsMsg.toString();
+            for (WebSocket player : players) {
+                if (player.isOpen()) {
+                    player.send(resultsMessage);
+                }
+            }
+
+            System.out.println("Broadcasting results and leaderboard");
         }
     }
 
     public static void main(String[] args) {
         QuizServer server = new QuizServer();
-        server.run();
+        server.start();
+        System.out.println("Quiz Server is running on ws://localhost:" + PORT);
     }
 }
