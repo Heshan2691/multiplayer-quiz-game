@@ -159,7 +159,6 @@ Each player now sees their own rank prominently after every question:
 - Instant awareness of personal standing
 - Beautiful purple gradient design
 
-See [PLAYER-RANK-DISPLAY.md](PLAYER-RANK-DISPLAY.md) for details.
 
 ### 🏆 Leaderboard While Waiting (Nov 2025)
 Players now see the current leaderboard continuously while waiting for admin:
@@ -169,7 +168,6 @@ Players now see the current leaderboard continuously while waiting for admin:
 - Better engagement and user experience
 - Players always see their current standings
 
-See [LEADERBOARD-WHILE-WAITING.md](LEADERBOARD-WHILE-WAITING.md) for details.
 
 ### 👥 Connected Players Display (Nov 2025)
 Admin panel now prominently displays connected players:
@@ -179,7 +177,6 @@ Admin panel now prominently displays connected players:
 - Located at top of Live Leaderboard panel
 - Professional blue-themed design
 
-See [CONNECTED-PLAYERS-DISPLAY.md](CONNECTED-PLAYERS-DISPLAY.md) for details.
 
 ### 📊 Admin Live Leaderboard (Nov 2025)
 Admin panel now displays a live ranked leaderboard:
@@ -189,7 +186,6 @@ Admin panel now displays a live ranked leaderboard:
 - Sorted by score + time
 - Updates automatically as players answer
 
-See [ADMIN-LEADERBOARD-FEATURE.md](ADMIN-LEADERBOARD-FEATURE.md) for details.
 
 ### 👨‍🏫 Admin-Controlled Question Progression (Nov 2025)
 Admin now controls when each question starts:
@@ -199,7 +195,6 @@ Admin now controls when each question starts:
 - No more automatic progression
 - First question auto-starts, last question auto-ends
 
-See [ADMIN-CONTROLLED-PROGRESSION.md](ADMIN-CONTROLLED-PROGRESSION.md) for details.
 
 ### ⚡ Time-Based Ranking System (Nov 2025)
 Players are now ranked using **both score AND time**:
@@ -209,7 +204,6 @@ Players are now ranked using **both score AND time**:
 - Only correct answers count toward total time
 - Fair and accurate using server timestamps
 
-See [TIME-RANKING-FEATURE.md](TIME-RANKING-FEATURE.md) and [BUGS-FIXED.md](BUGS-FIXED.md) for complete details.
 
 ### 🎉 Final Leaderboard Feature (Nov 2025)
 When the admin stops the game, all connected players now see a beautiful final leaderboard with:
@@ -218,20 +212,6 @@ When the admin stops the game, all connected players now see a beautiful final l
 - Complete score rankings with times
 - Professional presentation
 
-See [STOP-GAME-FEATURE.md](STOP-GAME-FEATURE.md) for implementation details and [FEATURE-DEMO.md](FEATURE-DEMO.md) for visual examples.
-
-## Documentation
-
-- **[README.md](README.md)** - Main project documentation (this file)
-- **[ADMIN-GUIDE.md](ADMIN-GUIDE.md)** - Complete admin panel guide
-- **[TIME-RANKING-FEATURE.md](TIME-RANKING-FEATURE.md)** - Time-based ranking system details
-- **[STOP-GAME-FEATURE.md](STOP-GAME-FEATURE.md)** - Stop game leaderboard feature details
-- **[AUTO-COMPLETE-FEATURE.md](AUTO-COMPLETE-FEATURE.md)** - Auto-complete game after all questions
-- **[FEATURE-DEMO.md](FEATURE-DEMO.md)** - Visual demo of final leaderboard
-- **[QUICK-REFERENCE.md](QUICK-REFERENCE.md)** - Developer quick reference
-- **[TEST-INSTRUCTIONS.md](TEST-INSTRUCTIONS.md)** - Testing guide
-
-- Check server console for error messages
 
 ## Future Enhancements
 
