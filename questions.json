@@ -1,17 +1,52 @@
 [
   {
-    "question": "What’s 2+2?",
-    "options": ["1", "2", "3", "4"],
+    "question": "What\u2019s 2+2?",
+    "options": [
+      "1",
+      "2",
+      "3",
+      "4"
+    ],
     "correctAnswer": "4"
   },
   {
     "question": "Capital of France?",
-    "options": ["London", "Paris", "Berlin", "Rome"],
+    "options": [
+      "London",
+      "Paris",
+      "Berlin",
+      "Rome"
+    ],
     "correctAnswer": "Paris"
   },
   {
     "question": "How many planets?",
-    "options": ["7", "8", "9", "10"],
+    "options": [
+      "7",
+      "8",
+      "9",
+      "10"
+    ],
     "correctAnswer": "8"
+  },
+  {
+    "question": "What is the capital of Sri Lanka",
+    "options": [
+      "Colombo",
+      "Kandy",
+      "Anuradhapura",
+      "Jpura"
+    ],
+    "correctAnswer": "Jpura"
+  },
+  {
+    "question": "8*6",
+    "options": [
+      "48",
+      "40",
+      "56",
+      "64"
+    ],
+    "correctAnswer": "48"
   }
 ]

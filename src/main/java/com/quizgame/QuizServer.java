@@ -19,12 +19,15 @@ public class QuizServer extends WebSocketServer {
     private static final Set<WebSocket> admins = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private static final ConcurrentHashMap<WebSocket, String> usernames = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, Integer> scores = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, Long> totalAnswerTimes = new ConcurrentHashMap<>(); // Total time in milliseconds
 
     // Dynamic question list loaded from JSON
     private static JSONArray questions;
     private static int questionIndex = 0;
     private static boolean gameRunning = false;
     private static QuestionEngine questionEngine;
+    private static long questionStartTime = 0; // Track when current question started
+    private static boolean waitingForNextQuestion = false; // Admin needs to trigger next question
 
     // Configurable settings
     private static int questionDuration = 20000; // 20 seconds
@@ -65,6 +68,7 @@ public class QuizServer extends WebSocketServer {
         String username = usernames.remove(conn);
         if (username != null) {
             scores.remove(username);
+            totalAnswerTimes.remove(username);
             sendToAllExcludingSender(username + " has left the game.", null);
             System.out.println("Player '" + username + "' disconnected.");
             broadcastToAdmins();
@@ -92,6 +96,7 @@ public class QuizServer extends WebSocketServer {
             if (username.isEmpty()) username = "Anonymous";
             usernames.put(conn, username);
             scores.put(username, 0);
+            totalAnswerTimes.put(username, 0L); // Initialize answer time tracking
 
             // Send welcome message with player info
             JSONObject welcomeMsg = new JSONObject();
@@ -120,12 +125,29 @@ public class QuizServer extends WebSocketServer {
                 String answer = msgObj.getString("answer");
                 int questionIdx = msgObj.getInt("questionIndex");
 
+                // Use SERVER time when answer is received (more reliable)
+                long answerReceivedTime = System.currentTimeMillis();
+
                 // Check if answer is correct
                 if (questionIdx < questions.length()) {
                     JSONObject questionObj = questions.getJSONObject(questionIdx);
                     String correctAnswer = questionObj.getString("correctAnswer");
 
                     if (answer.equals(correctAnswer)) {
+                        // Calculate time taken using server timestamps (in milliseconds)
+                        long timeTaken = answerReceivedTime - questionStartTime;
+
+                        // Only add time if valid (positive and within reasonable bounds)
+                        // Allow up to 2x question duration to handle delays
+                        if (timeTaken > 0 && timeTaken <= (questionDuration * 2)) {
+                            // Add to total answer time
+                            long currentTotalTime = totalAnswerTimes.getOrDefault(username, 0L);
+                            totalAnswerTimes.put(username, currentTotalTime + timeTaken);
+                            System.out.println("Player '" + username + "' answered correctly in " + timeTaken + "ms");
+                        } else if (timeTaken <= 0) {
+                            System.err.println("Warning: Invalid time for " + username + " - timeTaken=" + timeTaken);
+                        }
+
                         // Award points (configurable)
                         int currentScore = scores.getOrDefault(username, 0);
                         scores.put(username, currentScore + pointsPerAnswer);
@@ -134,6 +156,7 @@ public class QuizServer extends WebSocketServer {
                         correctMsg.put("type", "answerResult");
                         correctMsg.put("correct", true);
                         correctMsg.put("score", scores.get(username));
+                        correctMsg.put("timeTaken", timeTaken);
                         conn.send(correctMsg.toString());
                     } else {
                         JSONObject wrongMsg = new JSONObject();
@@ -181,6 +204,7 @@ public class QuizServer extends WebSocketServer {
         data.put("type", "adminData");
         data.put("questions", questions);
         data.put("currentQuestion", questionIndex);
+        data.put("waitingForNext", waitingForNextQuestion);
 
         JSONArray playerList = new JSONArray();
         for (WebSocket player : players) {
@@ -189,6 +213,7 @@ public class QuizServer extends WebSocketServer {
                 JSONObject playerData = new JSONObject();
                 playerData.put("username", username);
                 playerData.put("score", scores.getOrDefault(username, 0));
+                playerData.put("totalTime", totalAnswerTimes.getOrDefault(username, 0L));
                 playerList.put(playerData);
             }
         }
@@ -198,9 +223,32 @@ public class QuizServer extends WebSocketServer {
     }
 
     private void broadcastToAdmins() {
+        broadcastToAdminsStatic();
+    }
+
+    private static void broadcastToAdminsStatic() {
         for (WebSocket admin : admins) {
             if (admin.isOpen()) {
-                sendAdminData(admin);
+                JSONObject data = new JSONObject();
+                data.put("type", "adminData");
+                data.put("questions", questions);
+                data.put("currentQuestion", questionIndex);
+                data.put("waitingForNext", waitingForNextQuestion);
+
+                JSONArray playerList = new JSONArray();
+                for (WebSocket player : players) {
+                    String username = usernames.get(player);
+                    if (username != null) {
+                        JSONObject playerData = new JSONObject();
+                        playerData.put("username", username);
+                        playerData.put("score", scores.getOrDefault(username, 0));
+                        playerData.put("totalTime", totalAnswerTimes.getOrDefault(username, 0L));
+                        playerList.put(playerData);
+                    }
+                }
+                data.put("players", playerList);
+
+                admin.send(data.toString());
             }
         }
     }
@@ -229,6 +277,9 @@ public class QuizServer extends WebSocketServer {
                     break;
                 case "skipQuestion":
                     skipQuestion();
+                    break;
+                case "nextQuestion":
+                    nextQuestion();
                     break;
                 case "resetScores":
                     resetScores();
@@ -285,29 +336,98 @@ public class QuizServer extends WebSocketServer {
 
     private void startGame() {
         gameRunning = true;
+        questionIndex = 0; // Reset to start from first question
+        waitingForNextQuestion = false; // Reset flag
+
+        // Reset answer times for all players
+        for (String username : totalAnswerTimes.keySet()) {
+            totalAnswerTimes.put(username, 0L);
+        }
+
         System.out.println("Game started by admin");
     }
 
     private void stopGame() {
         gameRunning = false;
         System.out.println("Game stopped by admin");
+
+        // Broadcast final leaderboard to all players
+        broadcastFinalLeaderboard();
+    }
+
+    private void broadcastFinalLeaderboard() {
+        broadcastFinalLeaderboardStatic();
+    }
+
+    private static void broadcastFinalLeaderboardStatic() {
+        // Create leaderboard sorted by score (descending), then by time (ascending)
+        JSONArray leaderboard = new JSONArray();
+        scores.entrySet().stream()
+            .sorted((a, b) -> {
+                int scoreCompare = b.getValue().compareTo(a.getValue()); // Higher score first
+                if (scoreCompare != 0) {
+                    return scoreCompare;
+                }
+                // If scores are equal, compare by time (lower time is better)
+                // Treat 0 time as worst (player never answered correctly)
+                Long timeA = totalAnswerTimes.getOrDefault(a.getKey(), 0L);
+                Long timeB = totalAnswerTimes.getOrDefault(b.getKey(), 0L);
+
+                // If time is 0, treat as worst (Long.MAX_VALUE)
+                timeA = (timeA == 0L) ? Long.MAX_VALUE : timeA;
+                timeB = (timeB == 0L) ? Long.MAX_VALUE : timeB;
+
+                return timeA.compareTo(timeB);
+            })
+            .forEach(entry -> {
+                JSONObject playerScore = new JSONObject();
+                playerScore.put("username", entry.getKey());
+                playerScore.put("score", entry.getValue());
+                playerScore.put("totalTime", totalAnswerTimes.getOrDefault(entry.getKey(), 0L));
+                leaderboard.put(playerScore);
+            });
+
+        JSONObject finalResultsMsg = new JSONObject();
+        finalResultsMsg.put("type", "gameEnded");
+        finalResultsMsg.put("leaderboard", leaderboard);
+        finalResultsMsg.put("message", "Game has ended! Here are the final results:");
+
+        String finalMessage = finalResultsMsg.toString();
+        for (WebSocket player : players) {
+            if (player.isOpen()) {
+                player.send(finalMessage);
+            }
+        }
+
+        System.out.println("Broadcasting final leaderboard to all players");
     }
 
     private void skipQuestion() {
-        questionIndex++;
+        waitingForNextQuestion = false; // Allow next question to proceed
         System.out.println("Question skipped by admin");
+    }
+
+    private void nextQuestion() {
+        if (waitingForNextQuestion) {
+            waitingForNextQuestion = false; // Allow next question to proceed
+            System.out.println("Admin triggered next question");
+        } else {
+            System.out.println("Not waiting for next question - command ignored");
+        }
     }
 
     private void resetScores() {
         scores.clear();
+        totalAnswerTimes.clear();
         for (WebSocket player : players) {
             String username = usernames.get(player);
             if (username != null) {
                 scores.put(username, 0);
+                totalAnswerTimes.put(username, 0L);
             }
         }
         broadcastToAdmins();
-        System.out.println("All scores reset by admin");
+        System.out.println("All scores and times reset by admin");
     }
 
     private void saveQuestions() {
@@ -332,8 +452,20 @@ public class QuizServer extends WebSocketServer {
             while (true) {
                 // Only broadcast if game is running
                 if (gameRunning && !questions.isEmpty() && !players.isEmpty()) {
-                    int currentIndex = questionIndex % questions.length();
+                    // Check if all questions have been completed
+                    if (questionIndex >= questions.length()) {
+                        System.out.println("All questions completed! Ending game...");
+                        gameRunning = false;
+                        broadcastFinalLeaderboardStatic();
+                        questionIndex = 0; // Reset for next game
+                        continue;
+                    }
+
+                    int currentIndex = questionIndex;
                     JSONObject questionObj = questions.getJSONObject(currentIndex);
+
+                    // Record question start time
+                    questionStartTime = System.currentTimeMillis();
 
                     // Create question message
                     JSONObject questionMsg = new JSONObject();
@@ -344,9 +476,10 @@ public class QuizServer extends WebSocketServer {
                     questionMsg.put("duration", questionDuration / 1000); // Send duration in seconds
                     questionMsg.put("questionNumber", questionIndex + 1);
                     questionMsg.put("totalQuestions", questions.length());
+                    questionMsg.put("startTime", questionStartTime); // Send start time to clients
 
                     String questionMessage = questionMsg.toString();
-                    System.out.println("Broadcasting question " + (questionIndex + 1) + ": " + questionObj.getString("question"));
+                    System.out.println("Broadcasting question " + (questionIndex + 1) + "/" + questions.length() + ": " + questionObj.getString("question"));
 
                     // Broadcast to all players
                     for (WebSocket player : players) {
@@ -368,12 +501,30 @@ public class QuizServer extends WebSocketServer {
 
                     questionIndex++;
 
-                    // Pause before next question
-                    try {
-                        Thread.sleep(pauseDuration);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        break;
+                    // Wait for admin to trigger next question
+                    waitingForNextQuestion = true;
+                    System.out.println("Waiting for admin to start next question...");
+                    broadcastToAdminsStatic(); // Update admin panel to show waiting status
+
+                    // Notify players to wait
+                    JSONObject waitMsg = new JSONObject();
+                    waitMsg.put("type", "waitingForAdmin");
+                    waitMsg.put("message", "Waiting for admin to start next question...");
+                    String waitMessage = waitMsg.toString();
+                    for (WebSocket player : players) {
+                        if (player.isOpen()) {
+                            player.send(waitMessage);
+                        }
+                    }
+
+                    // Wait until admin triggers next question
+                    while (waitingForNextQuestion && gameRunning) {
+                        try {
+                            Thread.sleep(500); // Check every 500ms
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
                     }
                 } else {
                     if (questions.isEmpty()) {
@@ -393,14 +544,30 @@ public class QuizServer extends WebSocketServer {
             JSONObject questionObj = questions.getJSONObject(questionIdx);
             String correctAnswer = questionObj.getString("correctAnswer");
 
-            // Create leaderboard
+            // Create leaderboard sorted by score (descending), then by time (ascending)
             JSONArray leaderboard = new JSONArray();
             scores.entrySet().stream()
-                .sorted((a, b) -> b.getValue().compareTo(a.getValue()))
+                .sorted((a, b) -> {
+                    int scoreCompare = b.getValue().compareTo(a.getValue()); // Higher score first
+                    if (scoreCompare != 0) {
+                        return scoreCompare;
+                    }
+                    // If scores are equal, compare by time (lower time is better)
+                    // Treat 0 time as worst (player never answered correctly)
+                    Long timeA = totalAnswerTimes.getOrDefault(a.getKey(), 0L);
+                    Long timeB = totalAnswerTimes.getOrDefault(b.getKey(), 0L);
+
+                    // If time is 0, treat as worst (Long.MAX_VALUE)
+                    timeA = (timeA == 0L) ? Long.MAX_VALUE : timeA;
+                    timeB = (timeB == 0L) ? Long.MAX_VALUE : timeB;
+
+                    return timeA.compareTo(timeB);
+                })
                 .forEach(entry -> {
                     JSONObject playerScore = new JSONObject();
                     playerScore.put("username", entry.getKey());
                     playerScore.put("score", entry.getValue());
+                    playerScore.put("totalTime", totalAnswerTimes.getOrDefault(entry.getKey(), 0L));
                     leaderboard.put(playerScore);
                 });
 

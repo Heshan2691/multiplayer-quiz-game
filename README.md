@@ -7,12 +7,16 @@ A real-time multiplayer quiz game similar to Kahoot and Mentimeter, built with J
 ✨ **Real-time Multiplayer**: Multiple players can join and compete simultaneously
 🎨 **Beautiful UI**: Colorful, responsive design inspired by Kahoot
 ⏱️ **Timed Questions**: Configurable countdown for each question (default 20s)
-🏆 **Live Leaderboard**: Real-time score tracking and rankings
+🏆 **Live Leaderboard**: Real-time score tracking and rankings for players
 🎯 **Multiple Choice**: Four colorful answer options
 📊 **Results Display**: Shows correct answers and updated leaderboard after each question
 🔔 **Notifications**: Real-time updates when players join/leave
 👨‍💼 **Admin Panel**: Full game control with question management, timing, and settings
+📊 **Admin Leaderboard**: Live ranked leaderboard in admin panel with medals and times
 🎮 **Game Control**: Start/stop/pause game from admin panel
+🏁 **Final Leaderboard**: Automatic winner announcement with medals when game ends
+⚡ **Time-Based Ranking**: Players ranked by score first, then by speed (faster wins ties)
+👨‍🏫 **Admin-Controlled Pacing**: Admin manually triggers each question for better control
 ⚙️ **Customizable**: Adjust timer, points, and pause duration in real-time
 
 ## Prerequisites
@@ -111,13 +115,14 @@ Edit `questions.json` to add your own questions:
 
 ### Client → Server
 - Username string (first message)
-- Answer submission: `{"type":"answer", "answer":"Option", "questionIndex":0}`
+- Answer submission: `{"type":"answer", "answer":"Option", "questionIndex":0, "answerTime":...}` *(includes timestamp)*
 
 ### Server → Client
 - Welcome: `{"type":"welcome", "username":"..."}`
-- Question: `{"type":"question", "question":"...", "options":[...], ...}`
-- Answer result: `{"type":"answerResult", "correct":true/false, "score":100}`
-- Results: `{"type":"results", "correctAnswer":"...", "leaderboard":[...]}`
+- Question: `{"type":"question", "question":"...", "options":[...], "startTime":...}` *(includes timestamp)*
+- Answer result: `{"type":"answerResult", "correct":true/false, "score":100, "timeTaken":...}` *(includes time)*
+- Results: `{"type":"results", "correctAnswer":"...", "leaderboard":[...]}` *(leaderboard includes totalTime)*
+- Game ended: `{"type":"gameEnded", "message":"...", "leaderboard":[...]}` *(leaderboard includes totalTime)*
 - Player joined: `{"type":"playerJoined", "username":"..."}`
 
 ## Configuration
@@ -143,17 +148,111 @@ Edit `QuizServer.java` to modify:
 **Questions not loading?**
 - Ensure `questions.json` is in the project root
 - Validate JSON syntax
+## Recent Updates
+
+### 📊 Player's Own Rank Display (Nov 2025)
+Each player now sees their own rank prominently after every question:
+- Large, prominent rank display with medals
+- Personal statistics (score, time, total players)
+- Ordinal suffixes (1st, 2nd, 3rd, 4th...)
+- Highlighted row in leaderboard
+- Instant awareness of personal standing
+- Beautiful purple gradient design
+
+See [PLAYER-RANK-DISPLAY.md](PLAYER-RANK-DISPLAY.md) for details.
+
+### 🏆 Leaderboard While Waiting (Nov 2025)
+Players now see the current leaderboard continuously while waiting for admin:
+- Results screen stays visible (no auto-hide)
+- Leaderboard displayed throughout waiting period
+- Clear "Waiting for admin..." message shown
+- Better engagement and user experience
+- Players always see their current standings
+
+See [LEADERBOARD-WHILE-WAITING.md](LEADERBOARD-WHILE-WAITING.md) for details.
+
+### 👥 Connected Players Display (Nov 2025)
+Admin panel now prominently displays connected players:
+- Large, visible player count
+- List of all connected player names (comma-separated)
+- Real-time updates on join/leave
+- Located at top of Live Leaderboard panel
+- Professional blue-themed design
+
+See [CONNECTED-PLAYERS-DISPLAY.md](CONNECTED-PLAYERS-DISPLAY.md) for details.
+
+### 📊 Admin Live Leaderboard (Nov 2025)
+Admin panel now displays a live ranked leaderboard:
+- Real-time rankings with medals (🥇🥈🥉) for top 3
+- Shows player scores and answer times
+- Visual hierarchy with colored borders
+- Sorted by score + time
+- Updates automatically as players answer
+
+See [ADMIN-LEADERBOARD-FEATURE.md](ADMIN-LEADERBOARD-FEATURE.md) for details.
+
+### 👨‍🏫 Admin-Controlled Question Progression (Nov 2025)
+Admin now controls when each question starts:
+- After each question, game waits for admin
+- Click "Next Question" button to continue
+- Perfect for classroom pacing and discussions
+- No more automatic progression
+- First question auto-starts, last question auto-ends
+
+See [ADMIN-CONTROLLED-PROGRESSION.md](ADMIN-CONTROLLED-PROGRESSION.md) for details.
+
+### ⚡ Time-Based Ranking System (Nov 2025)
+Players are now ranked using **both score AND time**:
+- Primary ranking by score (higher is better)
+- Tiebreaker by speed (faster wins ties)
+- Time displayed in leaderboards: "⏱️12.3s"
+- Only correct answers count toward total time
+- Fair and accurate using server timestamps
+
+See [TIME-RANKING-FEATURE.md](TIME-RANKING-FEATURE.md) and [BUGS-FIXED.md](BUGS-FIXED.md) for complete details.
+
+### 🎉 Final Leaderboard Feature (Nov 2025)
+When the admin stops the game, all connected players now see a beautiful final leaderboard with:
+- 🥇🥈🥉 Medal system for top 3 players
+- 🏆 Trophy for the winner
+- Complete score rankings with times
+- Professional presentation
+
+See [STOP-GAME-FEATURE.md](STOP-GAME-FEATURE.md) for implementation details and [FEATURE-DEMO.md](FEATURE-DEMO.md) for visual examples.
+
+## Documentation
+
+- **[README.md](README.md)** - Main project documentation (this file)
+- **[ADMIN-GUIDE.md](ADMIN-GUIDE.md)** - Complete admin panel guide
+- **[TIME-RANKING-FEATURE.md](TIME-RANKING-FEATURE.md)** - Time-based ranking system details
+- **[STOP-GAME-FEATURE.md](STOP-GAME-FEATURE.md)** - Stop game leaderboard feature details
+- **[AUTO-COMPLETE-FEATURE.md](AUTO-COMPLETE-FEATURE.md)** - Auto-complete game after all questions
+- **[FEATURE-DEMO.md](FEATURE-DEMO.md)** - Visual demo of final leaderboard
+- **[QUICK-REFERENCE.md](QUICK-REFERENCE.md)** - Developer quick reference
+- **[TEST-INSTRUCTIONS.md](TEST-INSTRUCTIONS.md)** - Testing guide
+
 - Check server console for error messages
 
 ## Future Enhancements
 
 - [ ] Different point values based on answer speed
 - [ ] Question categories/difficulty levels
-- [ ] Sound effects and animations
 - [ ] Private rooms with game codes
-- [ ] Admin dashboard for game control
 - [ ] Statistics and player profiles
 - [ ] Mobile app version
+- [ ] Sound effects and animations
+
+## Completed Features
+
+- [x] ~~Admin dashboard for game control~~ ✅ **IMPLEMENTED**
+- [x] ~~Final leaderboard on game end~~ ✅ **IMPLEMENTED**
+- [x] ~~Time-based ranking system~~ ✅ **IMPLEMENTED**
+- [x] ~~Auto-complete game after all questions~~ ✅ **IMPLEMENTED**
+- [x] ~~Admin-controlled question progression~~ ✅ **IMPLEMENTED**
+- [x] ~~Admin live leaderboard view~~ ✅ **IMPLEMENTED**
+- [x] ~~Connected players count and names display~~ ✅ **IMPLEMENTED**
+- [x] ~~Show leaderboard while waiting for admin~~ ✅ **IMPLEMENTED**
+- [x] ~~Player's own rank display after each question~~ ✅ **IMPLEMENTED**
 
 ## License
 

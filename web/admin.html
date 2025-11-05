@@ -190,6 +190,17 @@
             transform: translateY(-2px);
         }
 
+        .btn-info {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-info:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+        }
+
         .control-buttons {
             display: flex;
             gap: 10px;
@@ -247,22 +258,64 @@
 
         .player-item {
             background: rgba(0,0,0,0.2);
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 10px;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 12px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            transition: all 0.3s ease;
+        }
+
+        .player-item:hover {
+            background: rgba(0,0,0,0.3);
+            transform: translateX(5px);
+        }
+
+        .player-item.rank-1 {
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.2) 0%, rgba(255, 215, 0, 0.05) 100%);
+            border: 2px solid rgba(255, 215, 0, 0.5);
+        }
+
+        .player-item.rank-2 {
+            background: linear-gradient(135deg, rgba(192, 192, 192, 0.2) 0%, rgba(192, 192, 192, 0.05) 100%);
+            border: 2px solid rgba(192, 192, 192, 0.5);
+        }
+
+        .player-item.rank-3 {
+            background: linear-gradient(135deg, rgba(205, 127, 50, 0.2) 0%, rgba(205, 127, 50, 0.05) 100%);
+            border: 2px solid rgba(205, 127, 50, 0.5);
+        }
+
+        .player-item .rank {
+            font-size: 1.3em;
+            font-weight: bold;
+            margin-right: 10px;
+            min-width: 35px;
+        }
+
+        .player-item .player-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
         }
 
         .player-item .name {
             font-weight: bold;
             color: #3498db;
+            font-size: 1.1em;
+        }
+
+        .player-item .time {
+            font-size: 0.85em;
+            color: #95a5a6;
+            margin-top: 3px;
         }
 
         .player-item .score {
             color: #2ecc71;
             font-weight: bold;
+            font-size: 1.2em;
         }
 
         .settings-grid {
@@ -383,7 +436,10 @@
                     <button class="btn btn-danger" onclick="stopGame()">⏹️ Stop Game</button>
                 </div>
                 <div class="control-buttons">
+                    <button class="btn btn-info" onclick="nextQuestion()">▶️ Next Question</button>
                     <button class="btn btn-warning" onclick="skipQuestion()">⏭️ Skip Question</button>
+                </div>
+                <div class="control-buttons">
                     <button class="btn btn-primary" onclick="resetScores()">🔄 Reset Scores</button>
                 </div>
             </div>
@@ -439,7 +495,12 @@
 
             <!-- Connected Players -->
             <div class="panel">
-                <h2>👥 Connected Players</h2>
+                <h2>🏆 Live Leaderboard</h2>
+                <div style="background: rgba(52, 152, 219, 0.2); padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center;">
+                    <h3 style="margin: 0 0 5px 0; color: #3498db; font-size: 1.1em;">👥 Connected Players</h3>
+                    <div style="font-size: 2em; font-weight: bold; color: #2ecc71;" id="playersCountDisplay">0</div>
+                    <div style="font-size: 0.9em; color: #95a5a6; margin-top: 5px;" id="playersNamesList">No players yet</div>
+                </div>
                 <div class="players-list" id="playersList">
                     <p style="text-align: center; color: #95a5a6;">No players connected</p>
                 </div>
@@ -514,22 +575,84 @@
             if (data.currentQuestion !== undefined) {
                 document.getElementById('currentQuestion').textContent = data.currentQuestion + 1;
             }
+
+            // Show/hide waiting for next question indicator
+            if (data.waitingForNext) {
+                showNotification('⏸️ Waiting for admin to start next question', false);
+            }
         }
 
         function updatePlayers(playerList) {
             players = playerList;
             document.getElementById('playersCount').textContent = players.length;
 
+            // Update the connected players display
+            document.getElementById('playersCountDisplay').textContent = players.length;
+
+            // Update player names list
+            const namesListElement = document.getElementById('playersNamesList');
+            if (players.length === 0) {
+                namesListElement.textContent = 'No players yet';
+            } else {
+                const playerNames = players.map(p => p.username).join(', ');
+                namesListElement.textContent = playerNames;
+            }
+
             const container = document.getElementById('playersList');
             if (players.length === 0) {
                 container.innerHTML = '<p style="text-align: center; color: #95a5a6;">No players connected</p>';
             } else {
-                container.innerHTML = players.map(player => `
-                    <div class="player-item">
-                        <span class="name">${player.username}</span>
-                        <span class="score">${player.score} pts</span>
-                    </div>
-                `).join('');
+                // Sort players by score (descending), then by time (ascending)
+                const sortedPlayers = [...players].sort((a, b) => {
+                    // Compare by score first
+                    if (b.score !== a.score) {
+                        return b.score - a.score;
+                    }
+                    // If scores are equal, compare by time (lower is better)
+                    const timeA = a.totalTime || 0;
+                    const timeB = b.totalTime || 0;
+
+                    // Treat 0 as worst (no correct answers)
+                    if (timeA === 0 && timeB === 0) return 0;
+                    if (timeA === 0) return 1;
+                    if (timeB === 0) return -1;
+
+                    return timeA - timeB;
+                });
+
+                container.innerHTML = sortedPlayers.map((player, index) => {
+                    const rank = index + 1;
+                    let medal = '';
+                    let rankClass = '';
+
+                    if (rank === 1) {
+                        medal = '🥇';
+                        rankClass = 'rank-1';
+                    } else if (rank === 2) {
+                        medal = '🥈';
+                        rankClass = 'rank-2';
+                    } else if (rank === 3) {
+                        medal = '🥉';
+                        rankClass = 'rank-3';
+                    } else {
+                        medal = `${rank}.`;
+                    }
+
+                    // Format time
+                    const timeInSeconds = player.totalTime ? (player.totalTime / 1000).toFixed(1) : null;
+                    const timeDisplay = timeInSeconds ? `⏱️ ${timeInSeconds}s` : '';
+
+                    return `
+                        <div class="player-item ${rankClass}">
+                            <span class="rank">${medal}</span>
+                            <div class="player-info">
+                                <span class="name">${player.username}</span>
+                                ${timeDisplay ? `<span class="time">${timeDisplay}</span>` : ''}
+                            </div>
+                            <span class="score">${player.score} pts</span>
+                        </div>
+                    `;
+                }).join('');
             }
         }
 
@@ -615,6 +738,11 @@
         function skipQuestion() {
             sendCommand('skipQuestion');
             showNotification('Question skipped!');
+        }
+
+        function nextQuestion() {
+            sendCommand('nextQuestion');
+            showNotification('Starting next question...');
         }
 
         function resetScores() {
