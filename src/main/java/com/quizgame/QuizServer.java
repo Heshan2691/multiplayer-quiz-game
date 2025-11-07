@@ -19,7 +19,8 @@ public class QuizServer extends WebSocketServer {
     private static final Set<WebSocket> admins = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private static final ConcurrentHashMap<WebSocket, String> usernames = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, Integer> scores = new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<String, Long> totalAnswerTimes = new ConcurrentHashMap<>(); // Total time in milliseconds
+    private static final ConcurrentHashMap<String, Long> totalAnswerTimes = new ConcurrentHashMap<>(); // Total time in
+                                                                                                       // milliseconds
 
     // Dynamic question list loaded from JSON
     private static JSONArray questions;
@@ -93,7 +94,8 @@ public class QuizServer extends WebSocketServer {
 
         if (usernames.get(conn) == null) {
             String username = message.trim();
-            if (username.isEmpty()) username = "Anonymous";
+            if (username.isEmpty())
+                username = "Anonymous";
             usernames.put(conn, username);
             scores.put(username, 0);
             totalAnswerTimes.put(username, 0L); // Initialize answer time tracking
@@ -328,7 +330,7 @@ public class QuizServer extends WebSocketServer {
             if (settings.has("pointsPerAnswer")) {
                 pointsPerAnswer = settings.getInt("pointsPerAnswer");
             }
-            System.out.println("Settings updated: Timer=" + (questionDuration/1000) + "s, Points=" + pointsPerAnswer);
+            System.out.println("Settings updated: Timer=" + (questionDuration / 1000) + "s, Points=" + pointsPerAnswer);
         } catch (Exception e) {
             System.err.println("Error updating settings: " + e.getMessage());
         }
@@ -363,29 +365,29 @@ public class QuizServer extends WebSocketServer {
         // Create leaderboard sorted by score (descending), then by time (ascending)
         JSONArray leaderboard = new JSONArray();
         scores.entrySet().stream()
-            .sorted((a, b) -> {
-                int scoreCompare = b.getValue().compareTo(a.getValue()); // Higher score first
-                if (scoreCompare != 0) {
-                    return scoreCompare;
-                }
-                // If scores are equal, compare by time (lower time is better)
-                // Treat 0 time as worst (player never answered correctly)
-                Long timeA = totalAnswerTimes.getOrDefault(a.getKey(), 0L);
-                Long timeB = totalAnswerTimes.getOrDefault(b.getKey(), 0L);
+                .sorted((a, b) -> {
+                    int scoreCompare = b.getValue().compareTo(a.getValue()); // Higher score first
+                    if (scoreCompare != 0) {
+                        return scoreCompare;
+                    }
+                    // If scores are equal, compare by time (lower time is better)
+                    // Treat 0 time as worst (player never answered correctly)
+                    Long timeA = totalAnswerTimes.getOrDefault(a.getKey(), 0L);
+                    Long timeB = totalAnswerTimes.getOrDefault(b.getKey(), 0L);
 
-                // If time is 0, treat as worst (Long.MAX_VALUE)
-                timeA = (timeA == 0L) ? Long.MAX_VALUE : timeA;
-                timeB = (timeB == 0L) ? Long.MAX_VALUE : timeB;
+                    // If time is 0, treat as worst (Long.MAX_VALUE)
+                    timeA = (timeA == 0L) ? Long.MAX_VALUE : timeA;
+                    timeB = (timeB == 0L) ? Long.MAX_VALUE : timeB;
 
-                return timeA.compareTo(timeB);
-            })
-            .forEach(entry -> {
-                JSONObject playerScore = new JSONObject();
-                playerScore.put("username", entry.getKey());
-                playerScore.put("score", entry.getValue());
-                playerScore.put("totalTime", totalAnswerTimes.getOrDefault(entry.getKey(), 0L));
-                leaderboard.put(playerScore);
-            });
+                    return timeA.compareTo(timeB);
+                })
+                .forEach(entry -> {
+                    JSONObject playerScore = new JSONObject();
+                    playerScore.put("username", entry.getKey());
+                    playerScore.put("score", entry.getValue());
+                    playerScore.put("totalTime", totalAnswerTimes.getOrDefault(entry.getKey(), 0L));
+                    leaderboard.put(playerScore);
+                });
 
         JSONObject finalResultsMsg = new JSONObject();
         finalResultsMsg.put("type", "gameEnded");
@@ -479,7 +481,8 @@ public class QuizServer extends WebSocketServer {
                     questionMsg.put("startTime", questionStartTime); // Send start time to clients
 
                     String questionMessage = questionMsg.toString();
-                    System.out.println("Broadcasting question " + (questionIndex + 1) + "/" + questions.length() + ": " + questionObj.getString("question"));
+                    System.out.println("Broadcasting question " + (questionIndex + 1) + "/" + questions.length() + ": "
+                            + questionObj.getString("question"));
 
                     // Broadcast to all players
                     for (WebSocket player : players) {
@@ -547,29 +550,29 @@ public class QuizServer extends WebSocketServer {
             // Create leaderboard sorted by score (descending), then by time (ascending)
             JSONArray leaderboard = new JSONArray();
             scores.entrySet().stream()
-                .sorted((a, b) -> {
-                    int scoreCompare = b.getValue().compareTo(a.getValue()); // Higher score first
-                    if (scoreCompare != 0) {
-                        return scoreCompare;
-                    }
-                    // If scores are equal, compare by time (lower time is better)
-                    // Treat 0 time as worst (player never answered correctly)
-                    Long timeA = totalAnswerTimes.getOrDefault(a.getKey(), 0L);
-                    Long timeB = totalAnswerTimes.getOrDefault(b.getKey(), 0L);
+                    .sorted((a, b) -> {
+                        int scoreCompare = b.getValue().compareTo(a.getValue()); // Higher score first
+                        if (scoreCompare != 0) {
+                            return scoreCompare;
+                        }
+                        // If scores are equal, compare by time (lower time is better)
+                        // Treat 0 time as worst (player never answered correctly)
+                        Long timeA = totalAnswerTimes.getOrDefault(a.getKey(), 0L);
+                        Long timeB = totalAnswerTimes.getOrDefault(b.getKey(), 0L);
 
-                    // If time is 0, treat as worst (Long.MAX_VALUE)
-                    timeA = (timeA == 0L) ? Long.MAX_VALUE : timeA;
-                    timeB = (timeB == 0L) ? Long.MAX_VALUE : timeB;
+                        // If time is 0, treat as worst (Long.MAX_VALUE)
+                        timeA = (timeA == 0L) ? Long.MAX_VALUE : timeA;
+                        timeB = (timeB == 0L) ? Long.MAX_VALUE : timeB;
 
-                    return timeA.compareTo(timeB);
-                })
-                .forEach(entry -> {
-                    JSONObject playerScore = new JSONObject();
-                    playerScore.put("username", entry.getKey());
-                    playerScore.put("score", entry.getValue());
-                    playerScore.put("totalTime", totalAnswerTimes.getOrDefault(entry.getKey(), 0L));
-                    leaderboard.put(playerScore);
-                });
+                        return timeA.compareTo(timeB);
+                    })
+                    .forEach(entry -> {
+                        JSONObject playerScore = new JSONObject();
+                        playerScore.put("username", entry.getKey());
+                        playerScore.put("score", entry.getValue());
+                        playerScore.put("totalTime", totalAnswerTimes.getOrDefault(entry.getKey(), 0L));
+                        leaderboard.put(playerScore);
+                    });
 
             JSONObject resultsMsg = new JSONObject();
             resultsMsg.put("type", "results");
@@ -588,8 +591,14 @@ public class QuizServer extends WebSocketServer {
     }
 
     public static void main(String[] args) {
-        QuizServer server = new QuizServer();
-        server.start();
-        System.out.println("Quiz Server is running on ws://localhost:" + PORT);
+        QuizServer quizServer = new QuizServer();
+        quizServer.start();
+
+        AuthServer authServer = new AuthServer();
+        authServer.start();
+
+        System.out.println("Quiz Server is running on ws://localhost:1234");
+        System.out.println("Auth Server is running on ws://localhost:1235");
     }
+
 }
