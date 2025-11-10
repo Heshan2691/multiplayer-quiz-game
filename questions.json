@@ -48,5 +48,15 @@
       "64"
     ],
     "correctAnswer": "48"
+  },
+  {
+    "question": "Largest country in the world",
+    "options": [
+      "India",
+      "China",
+      "Russia",
+      "USA"
+    ],
+    "correctAnswer": "Russia"
   }
 ]
