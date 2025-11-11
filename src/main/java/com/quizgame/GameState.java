@@ -9,6 +9,9 @@ import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.List;
+import java.util.ArrayList;
+import org.json.JSONObject;
 
 public class GameState {
     public static final int PORT = 1234;
@@ -49,4 +52,7 @@ public class GameState {
             System.err.println("Error saving questions: " + e.getMessage());
         }
     }
+
+    public static List<JSONObject> chatHistory = new ArrayList<>();
+
 }

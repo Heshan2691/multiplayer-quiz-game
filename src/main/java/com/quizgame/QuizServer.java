@@ -41,21 +41,52 @@ public class QuizServer extends WebSocketServer {
 
     @Override
     public void onMessage(WebSocket conn, String message) {
+
+        // ADMIN IDENTIFICATION
         if ("__ADMIN__".equals(message)) {
             GameState.admins.add(conn);
             System.out.println("Admin connected: " + conn.getRemoteSocketAddress());
             AdminManager.sendAdminData(conn);
+
+            // Send chat history to admin
+            JSONObject history = new JSONObject();
+            history.put("type", "chatHistory");
+            history.put("history", GameState.chatHistory);
+            conn.send(history.toString());
             return;
         }
 
+        // ADMIN COMMANDS
         if (GameState.admins.contains(conn)) {
+            try {
+                JSONObject adminMsg = new JSONObject(message);
+                if ("adminChat".equals(adminMsg.optString("command"))) {
+                    String text = adminMsg.getJSONObject("data").getString("message");
+
+                    JSONObject chat = new JSONObject();
+                    chat.put("type", "chat");
+                    chat.put("from", "admin");
+                    chat.put("username", "Admin");
+                    chat.put("message", text);
+                    chat.put("timestamp", System.currentTimeMillis());
+
+                    GameState.chatHistory.add(chat);
+                    broadcastChat(conn, chat);
+
+                    return;
+                }
+            } catch (Exception ignored) {
+            }
+
             AdminManager.handleAdminCommand(conn, message);
             return;
         }
 
+        // NEW PLAYER USERNAME REGISTRATION
         if (GameState.usernames.get(conn) == null) {
             String username = message.trim();
-            if (username.isEmpty()) username = "Anonymous";
+            if (username.isEmpty())
+                username = "Anonymous";
             GameState.usernames.put(conn, username);
             GameState.scores.put(username, 0);
             GameState.totalAnswerTimes.put(username, 0L);
@@ -75,6 +106,29 @@ public class QuizServer extends WebSocketServer {
             return;
         }
 
+        // ✅ PLAYER CHAT HANDLING
+        try {
+            JSONObject obj = new JSONObject(message);
+            if ("chat".equals(obj.optString("type"))) {
+                String username = GameState.usernames.get(conn);
+                String text = obj.getString("message");
+
+                JSONObject chat = new JSONObject();
+                chat.put("type", "chat");
+                chat.put("from", "player");
+                chat.put("username", username);
+                chat.put("message", text);
+                chat.put("timestamp", System.currentTimeMillis());
+
+                GameState.chatHistory.add(chat);
+                broadcastChat(conn, chat);
+
+                return;
+            }
+        } catch (Exception ignore) {
+        }
+
+        // ✅ ANSWER HANDLING (unchanged)
         try {
             JSONObject msgObj = new JSONObject(message);
             if ("answer".equals(msgObj.getString("type"))) {
@@ -89,12 +143,10 @@ public class QuizServer extends WebSocketServer {
 
                     if (answer.equals(correctAnswer)) {
                         long timeTaken = answerReceivedTime - GameState.questionStartTime;
+
                         if (timeTaken > 0 && timeTaken <= (GameState.questionDuration * 2)) {
                             long currentTotalTime = GameState.totalAnswerTimes.getOrDefault(username, 0L);
                             GameState.totalAnswerTimes.put(username, currentTotalTime + timeTaken);
-                            System.out.println("Player '" + username + "' answered correctly in " + timeTaken + "ms");
-                        } else if (timeTaken <= 0) {
-                            System.err.println("Warning: Invalid time for " + username + " - timeTaken=" + timeTaken);
                         }
 
                         int currentScore = GameState.scores.getOrDefault(username, 0);
@@ -104,7 +156,6 @@ public class QuizServer extends WebSocketServer {
                         correctMsg.put("type", "answerResult");
                         correctMsg.put("correct", true);
                         correctMsg.put("score", GameState.scores.get(username));
-                        correctMsg.put("timeTaken", timeTaken);
                         conn.send(correctMsg.toString());
                     } else {
                         JSONObject wrongMsg = new JSONObject();
@@ -117,6 +168,7 @@ public class QuizServer extends WebSocketServer {
                     AdminManager.broadcastToAdmins();
                 }
             }
+
         } catch (Exception e) {
             System.err.println("Error processing message: " + e.getMessage());
         }
@@ -124,7 +176,8 @@ public class QuizServer extends WebSocketServer {
 
     @Override
     public void onError(WebSocket conn, Exception ex) {
-        if (ex != null) System.err.println("WebSocket error: " + ex.getMessage());
+        if (ex != null)
+            System.err.println("WebSocket error: " + ex.getMessage());
     }
 
     @Override
@@ -135,7 +188,8 @@ public class QuizServer extends WebSocketServer {
 
     private void sendToAllExcludingSender(String message, WebSocket sender) {
         for (WebSocket player : GameState.players) {
-            if (player != sender && player.isOpen()) player.send(message);
+            if (player != sender && player.isOpen())
+                player.send(message);
         }
     }
 
@@ -148,6 +202,29 @@ public class QuizServer extends WebSocketServer {
 
         System.out.println("Quiz Server is running on ws://localhost:" + GameState.PORT);
         System.out.println("Auth Server is running on ws://localhost:1235");
+    }
+
+    private void broadcastChat(WebSocket sender, JSONObject chatMessage) {
+        String from = chatMessage.optString("from");
+        String msg = chatMessage.toString();
+
+        if ("admin".equals(from)) {
+            // Admin messages go to all players + other admins (not the sender)
+            for (WebSocket player : GameState.players) {
+                if (player != null && player.isOpen())
+                    player.send(msg);
+            }
+            for (WebSocket admin : GameState.admins) {
+                if (admin != null && admin.isOpen() && admin != sender)
+                    admin.send(msg);
+            }
+        } else if ("player".equals(from)) {
+            // Player messages go to all admins + the player who sent it
+            for (WebSocket admin : GameState.admins) {
+                if (admin != null && admin.isOpen())
+                    admin.send(msg);
+            }
+        }
     }
 
 }

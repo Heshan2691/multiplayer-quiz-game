@@ -47,7 +47,8 @@ multiplayer-quiz-game/
 ```bash
 # Compile and run the server
 mvn clean compile
-mvn exec:java -Dexec.mainClass="com.quizgame.QuizServer"
+mvn exec:java -Dexec.mainClass="com.quizgame.QuizServer" #or
+mvn exec:java "-Dexec.mainClass=com.quizgame.QuizServer"
 ```
 
 The server will start on `ws://localhost:1234`
@@ -59,6 +60,7 @@ Open `web/index.html` in your web browser. You can open multiple browser tabs/wi
 ### 3. Open Admin Panel (Optional but Recommended)
 
 Open `web/admin.html` in another browser tab to control the game:
+
 - Add/delete questions in real-time
 - Set question timer duration
 - Start/stop the game
@@ -114,20 +116,23 @@ Edit `questions.json` to add your own questions:
 ## Message Protocol
 
 ### Client → Server
+
 - Username string (first message)
-- Answer submission: `{"type":"answer", "answer":"Option", "questionIndex":0, "answerTime":...}` *(includes timestamp)*
+- Answer submission: `{"type":"answer", "answer":"Option", "questionIndex":0, "answerTime":...}` _(includes timestamp)_
 
 ### Server → Client
+
 - Welcome: `{"type":"welcome", "username":"..."}`
-- Question: `{"type":"question", "question":"...", "options":[...], "startTime":...}` *(includes timestamp)*
-- Answer result: `{"type":"answerResult", "correct":true/false, "score":100, "timeTaken":...}` *(includes time)*
-- Results: `{"type":"results", "correctAnswer":"...", "leaderboard":[...]}` *(leaderboard includes totalTime)*
-- Game ended: `{"type":"gameEnded", "message":"...", "leaderboard":[...]}` *(leaderboard includes totalTime)*
+- Question: `{"type":"question", "question":"...", "options":[...], "startTime":...}` _(includes timestamp)_
+- Answer result: `{"type":"answerResult", "correct":true/false, "score":100, "timeTaken":...}` _(includes time)_
+- Results: `{"type":"results", "correctAnswer":"...", "leaderboard":[...]}` _(leaderboard includes totalTime)_
+- Game ended: `{"type":"gameEnded", "message":"...", "leaderboard":[...]}` _(leaderboard includes totalTime)_
 - Player joined: `{"type":"playerJoined", "username":"..."}`
 
 ## Configuration
 
 Edit `QuizServer.java` to modify:
+
 - Port number: `PORT = 1234`
 - Round duration: `ROUND_DURATION = 20000` (milliseconds)
 - Pause between questions: `PAUSE_BETWEEN_QUESTIONS = 5000` (milliseconds)
@@ -136,22 +141,28 @@ Edit `QuizServer.java` to modify:
 ## Troubleshooting
 
 **Server won't start?**
+
 - Make sure port 1234 is not in use
 - Check Java version: `java -version` (should be 11+)
 - Rebuild with: `mvn clean install`
 
 **Client can't connect?**
+
 - Verify server is running
 - Check browser console for errors
 - Make sure WebSocket URL is correct: `ws://localhost:1234`
 
 **Questions not loading?**
+
 - Ensure `questions.json` is in the project root
 - Validate JSON syntax
+
 ## Recent Updates
 
 ### 📊 Player's Own Rank Display (Nov 2025)
+
 Each player now sees their own rank prominently after every question:
+
 - Large, prominent rank display with medals
 - Personal statistics (score, time, total players)
 - Ordinal suffixes (1st, 2nd, 3rd, 4th...)
@@ -159,59 +170,64 @@ Each player now sees their own rank prominently after every question:
 - Instant awareness of personal standing
 - Beautiful purple gradient design
 
-
 ### 🏆 Leaderboard While Waiting (Nov 2025)
+
 Players now see the current leaderboard continuously while waiting for admin:
+
 - Results screen stays visible (no auto-hide)
 - Leaderboard displayed throughout waiting period
 - Clear "Waiting for admin..." message shown
 - Better engagement and user experience
 - Players always see their current standings
 
-
 ### 👥 Connected Players Display (Nov 2025)
+
 Admin panel now prominently displays connected players:
+
 - Large, visible player count
 - List of all connected player names (comma-separated)
 - Real-time updates on join/leave
 - Located at top of Live Leaderboard panel
 - Professional blue-themed design
 
-
 ### 📊 Admin Live Leaderboard (Nov 2025)
+
 Admin panel now displays a live ranked leaderboard:
+
 - Real-time rankings with medals (🥇🥈🥉) for top 3
 - Shows player scores and answer times
 - Visual hierarchy with colored borders
 - Sorted by score + time
 - Updates automatically as players answer
 
-
 ### 👨‍🏫 Admin-Controlled Question Progression (Nov 2025)
+
 Admin now controls when each question starts:
+
 - After each question, game waits for admin
 - Click "Next Question" button to continue
 - Perfect for classroom pacing and discussions
 - No more automatic progression
 - First question auto-starts, last question auto-ends
 
-
 ### ⚡ Time-Based Ranking System (Nov 2025)
+
 Players are now ranked using **both score AND time**:
+
 - Primary ranking by score (higher is better)
 - Tiebreaker by speed (faster wins ties)
 - Time displayed in leaderboards: "⏱️12.3s"
 - Only correct answers count toward total time
 - Fair and accurate using server timestamps
 
-
 ### 🎉 Final Leaderboard Feature (Nov 2025)
+
 When the admin stops the game, all connected players now see a beautiful final leaderboard with:
+
 - 🥇🥈🥉 Medal system for top 3 players
 - 🏆 Trophy for the winner
 - Complete score rankings with times
 - Professional presentation
-
 
 ## Future Enhancements
 
@@ -241,4 +257,3 @@ MIT License - Feel free to use and modify!
 ## Author
 
 Built with ❤️ for multiplayer quiz fun!
-
