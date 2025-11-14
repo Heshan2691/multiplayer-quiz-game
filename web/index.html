@@ -642,7 +642,10 @@
     font-family: 'Inter', sans-serif;
     z-index: 99;
     overflow: hidden;
+    transform: translateY(120%);   /* Hidden initially */
+    transition: transform 0.35s ease-out;
 ">
+
 
     <div style="background: linear-gradient(135deg,#667eea,#764ba2); padding: 12px 16px; color: white; font-weight: 600;">
         💬 Live Chat
@@ -663,6 +666,30 @@
         ">Send</button>
     </div>
 </div>
+
+<!-- Floating Chat Toggle Button -->
+<div id="chatToggleBtn" style="
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg,#667eea,#764ba2);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-size: 1.8em;
+    cursor: pointer;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+    z-index: 100;
+    transition: bottom 0.3s ease;  /* <--- ADD THIS */
+">
+    💬
+</div>
+
+
 
 
 <script>
@@ -1011,6 +1038,25 @@
     document.getElementById('chatInput').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') document.getElementById('sendChat').click();
     });
+
+    //toggle chat
+    const chatBox = document.getElementById("chatContainer");
+    const toggleBtn = document.getElementById("chatToggleBtn");
+
+    let chatOpen = false;
+
+    toggleBtn.onclick = () => {
+        chatOpen = !chatOpen;
+
+        if (chatOpen) {
+            chatBox.style.transform = "translateY(0%)";
+            toggleBtn.style.bottom = "320px"; // move button up = no overlap
+        } else {
+            chatBox.style.transform = "translateY(120%)";
+            toggleBtn.style.bottom = "25px"; // move button back
+        }
+    };
+
 
 </script>
 </body>
