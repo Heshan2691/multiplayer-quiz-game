@@ -60,6 +60,36 @@ public class QuizServer extends WebSocketServer {
         if (GameState.admins.contains(conn)) {
             try {
                 JSONObject adminMsg = new JSONObject(message);
+                if ("adminPrivateChat".equals(adminMsg.optString("command"))) {
+                    String targetUser = adminMsg.getJSONObject("data").getString("to");
+                    String text = adminMsg.getJSONObject("data").getString("message");
+
+                    WebSocket targetConn = null;
+
+                    // Find the player's WebSocket connection
+                    for (WebSocket wsConn : GameState.players) {
+                        String name = GameState.usernames.get(wsConn);
+                        if (name != null && name.equalsIgnoreCase(targetUser)) {
+                            targetConn = wsConn;
+                            break;
+                        }
+                    }
+
+                    if (targetConn != null) {
+                        JSONObject chat = new JSONObject();
+                        chat.put("type", "chat");
+                        chat.put("from", "admin");
+                        chat.put("username", "Admin (private)");
+                        chat.put("message", text);
+                        chat.put("timestamp", System.currentTimeMillis());
+
+                        // Send only to target user
+                        targetConn.send(chat.toString());
+                    }
+
+                    return;
+                }
+
                 if ("adminChat".equals(adminMsg.optString("command"))) {
                     String text = adminMsg.getJSONObject("data").getString("message");
 
