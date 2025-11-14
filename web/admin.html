@@ -306,9 +306,20 @@
                     displayQuestions();
                     break;
                 case 'chat':
-                    // { type: 'chat', from: 'player'|'admin', username, message, timestamp }
-                    appendChatMessage(data.username || (data.from === 'admin' ? 'Admin' : 'Player'), data.message, data.from === 'admin');
-                    break;
+                // Prevent double admin messages
+                if (data.from === 'admin') {
+                    // Ignore server echo for admin's own message
+                    return;
+                }
+
+                // Player messages should appear normally
+                appendChatMessage(
+                    data.username || "Player",
+                    data.message,
+                    false
+                );
+                break;
+
                 case 'chatHistory':
                     populateChatHistory(data.history || []);
                     break;
@@ -466,13 +477,47 @@
             });
         }
 
-        function sendAdminChatMessage(text) {
+function sendAdminChatMessage(text) {
     const trimmed = text.trim();
     if (!trimmed) return;
 
-    const payload = { command: 'adminChat', data: { message: trimmed } };
-    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
+    let payload;
+
+    // Check for private message: starts with "@username"
+    if (trimmed.startsWith("@")) {
+        const parts = trimmed.split(" ");
+        const targetUser = parts[0].substring(1); // remove '@'
+        const message = parts.slice(1).join(" ");
+
+        if (!targetUser || !message) return;
+
+        payload = {
+            command: "adminPrivateChat",
+            data: {
+                to: targetUser,
+                message: message,
+            }
+        };
+
+        // Show in admin panel as sent
+        appendChatMessage("You → " + targetUser, message, true);
+
+    } else {
+        // Normal broadcast message
+        payload = {
+            command: "adminChat",
+            data: { message: trimmed }
+        };
+
+        appendChatMessage("You", trimmed, true);
+    }
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(payload));
+    }
 }
+
+
 
 
         // Wire chat input
